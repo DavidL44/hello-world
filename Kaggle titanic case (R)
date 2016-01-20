@@ -1,0 +1,152 @@
+# Set working directory and import datafiles
+setwd("//matfic00/Utilisateurs-AXC/D-LONGEANIE/Personnel/BIG DATA FORMATION/KAGGLE/Titanic Case")
+
+# Import data
+train <- read.csv("//matfic00/Utilisateurs-AXC/D-LONGEANIE/Personnel/BIG DATA FORMATION/KAGGLE/Titanic Case/train.csv")
+View(train)
+test <- read.csv("//matfic00/Utilisateurs-AXC/D-LONGEANIE/Personnel/BIG DATA FORMATION/KAGGLE/Titanic Case/test.csv")
+View(test)
+
+# Creation et initialisation à 0 de la variable Survived
+test$Survived <- 0
+
+
+# Append des deux tables
+combi <- rbind(train, test)
+
+# cast one column (vb Name) back into a text string (which was previously factor one)
+combi$Name <- as.character(combi$Name)
+combi$Title <- sapply(combi$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]][2]})
+combi$Title <- sub(' ', '', combi$Title)
+combi$Title[combi$Title %in% c('Mme', 'Mlle')] <- 'Mlle'
+combi$Title[combi$Title %in% c('Capt', 'Don', 'Major', 'Sir')] <- 'Sir'
+combi$Title[combi$Title %in% c('Dona', 'Lady', 'the Countess', 'Jonkheer')] <- 'Lady'
+# change the variable type to a factor
+combi$Title <- factor(combi$Title)
+
+combi$FamilySize <- combi$SibSp + combi$Parch + 1
+combi$Surname <- sapply(combi$Name, FUN=function(x) {strsplit(x, split='[,.]')[[1]][1]})
+combi$FamilyID <- paste(as.character(combi$FamilySize), combi$Surname, sep=" ")
+combi$FamilyID[combi$FamilySize <= 2] <- 'Small'
+
+famIDs <- data.frame(table(combi$FamilyID))
+famIDs <- famIDs[famIDs$Freq <= 2,]
+
+combi$FamilyID[combi$FamilyID %in% famIDs$Var1] <- 'Small'
+combi$FamilyID <- factor(combi$FamilyID)
+
+############################################################################################
+#            Création vb Population (Baby Child Adolescent Adult Senior)                   #
+#                                     0-3 3-14     14-18   18-60   60+                     #
+############################################################################################
+combi$Population <- NA
+combi$Population[combi$Age>=60] <- 'Senior'
+combi$Population[combi$Age<60] <- 'Adult 45-60'
+combi$Population[combi$Age<45] <- 'Adult 35-45'
+combi$Population[combi$Age<35] <- 'Adult 25-35'
+combi$Population[combi$Age<25] <- 'Adult 18-25'
+combi$Population[combi$Age<18] <- 'Adolescent'
+combi$Population[combi$Age<14] <- 'Child'
+combi$Population[combi$Age<3] <- 'Baby'
+combi$Population <- factor(combi$Population)
+
+table(combi$Population)
+prop.table(table(combi$Population))
+
+combi$Fare2 <- '30+'
+combi$Fare2[combi$Fare < 30 & combi$Fare >= 20] <- '20-30'
+combi$Fare2[combi$Fare < 20 & combi$Fare >= 10] <- '10-20'
+combi$Fare2[combi$Fare < 10] <- '<10'
+combi$Fare2 <- factor(combi$Fare2)
+
+combi$Cabin2 <- substr(combi$Cabin,1,1)
+combi$Cabin2 <- factor(combi$Cabin2)
+
+
+combi$Ticket <- as.character(combi$Ticket)
+combi$TicketPrefixe <- sapply(combi$Ticket, FUN=function(x) {strsplit(x, split='[" "]')[[1]][1]})
+combi$TicketPrefixe <- factor(combi$TicketPrefixe)
+combi$Ticket <- factor(combi$Ticket)
+
+summary(combi$TicketPrefixe)
+table(combi$TicketPrefixe)
+
+combi$TicketPrefixe <- as.character(combi$TicketPrefixe)
+combi$TicketPrefixe2 <-NA
+combi$TicketPrefixe2 <- as.numeric(combi$TicketPrefixe)
+
+combi$TicketPrefixe3 <- as.character(combi$TicketPrefixe)
+combi$TicketPrefixe3[combi$TicketPrefixe2 < 10000000] <- "1000000"
+combi$TicketPrefixe3[combi$TicketPrefixe2 < 1000000] <- "100000"
+combi$TicketPrefixe3[combi$TicketPrefixe2 < 100000] <- "10000"
+combi$TicketPrefixe3[combi$TicketPrefixe2 < 10000] <- "1000"
+combi$TicketPrefixe3[combi$TicketPrefixe2 < 1000] <- "100"
+combi$TicketPrefixe3[combi$TicketPrefixe2 < 100] <- "10"
+
+############################################################################
+#                          ERROR                                           #
+############################################################################
+#combi$TicketPrefixe3[is.na(combi$TicketPrefixe3)] <- combi$TicketPrefixe
+
+# Warning message:
+#   In combi$TicketPrefixe3[is.na(combi$TicketPrefixe3)] <- combi$TicketPrefixe :
+#   number of items to replace is not a multiple of replacement length
+############################################################################
+
+combi$TicketPrefixe3 <- as.character(combi$TicketPrefixe3)
+combi$TicketPrefixe3 <- gsub('\\.', '', combi$TicketPrefixe3)
+combi$TicketPrefixe3 <- factor(combi$TicketPrefixe3)
+summary(combi$TicketPrefixe3)
+combi$TicketPrefixe <- factor(combi$TicketPrefixe)
+
+
+# Dissociation en 2 tables - The comma after that with no numbers following it indicates that we want to take ALL columns with this subset and store it to the assigned dataframe.
+train <- combi[1:891,]
+test <- combi[892:1309,]
+
+# Chargement du package "rpart" (Recursive Partitioning and Regression Trees - uses the CART decision tree algorithm)
+library(rpart)
+
+install.packages('rattle')
+install.packages('rpart.plot')
+install.packages('RColorBrewer')
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
+
+
+#############################   decision trees    #############################################################################################################################################################
+#fit <- rpart(Survived ~ Pclass + Sex + SibSp + Parch + Embarked + Cabin2 + Age2 + Population + FamilySize + Fare2 + Title + TicketPrefixe3, data=train, method="class", control=rpart.control(minsplit=15, cp=0.005))
+#fit <- rpart(Survived ~ Pclass + Sex + Embarked + Cabin2 + Age2 + FamilySize + Fare2 + Title + TicketPrefixe3, data=train, method="class", control=rpart.control(minsplit=15, cp=0.005))
+fit <- rpart(Survived ~ Pclass + Sex + Embarked + Cabin2 + Age2 + FamilySize + Fare2 + Title + TicketPrefixe3, data=train, method="class")
+#fit <- rpart(Survived ~ Pclass + Sex + SibSp + Parch + Embarked + Cabin2 + Age2 + Population + FamilySize + Fare2 + Title + TicketPrefixe3, data=train, method="class")
+
+fancyRpartPlot(fit)
+Prediction <- predict(fit, test, type = "class")
+submit <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "mybesttree.csv", row.names = FALSE)
+########################################################################################################################################################################################################################
+
+set.seed(415)
+
+##################################  Random Forest algorithm  #############################################################################################################################################################
+install.packages('randomForest')
+library(randomForest)
+fit <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age2 + SibSp + Parch + Fare2 + Embarked + Title + FamilySize +
+                      FamilyID2 + Cabin2 + TicketPrefixe3, data=train, importance=TRUE, ntree=2000)
+varImpPlot(fit)
+Prediction <- predict(fit, test)
+submit <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "mybestRFA.csv", row.names = FALSE)
+
+################################# forest of conditional inference trees #####################################################################################################################################################
+install.packages('party')
+library(party)
+fit <- cforest(as.factor(Survived) ~ Pclass + Sex + Age2 + SibSp + Parch + Fare2 + Embarked + Title + FamilySize +
+                 FamilyID + Cabin2 + TicketPrefixe3, data = train, controls=cforest_unbiased(ntree=2000, mtry=3))
+
+# Conditional inference trees are able to handle factors with more levels than Random Forests can, so let’s go back to out original version of FamilyID. You may have also noticed a few new arguments. Now we have to specify the number of trees inside a more complicated command, as arguments are passed to cforest differently. We also have to manually set the number of variables to sample at each node as the default of 5 is pretty high for our dataset. Okay, let’s make another prediction:
+Prediction <- predict(fit, test, OOB=TRUE, type = "response")
+submit <- data.frame(PassengerId = test$PassengerId, Survived = Prediction)
+write.csv(submit, file = "mybestForestConditionalInferenceTree.csv", row.names = FALSE)
+
